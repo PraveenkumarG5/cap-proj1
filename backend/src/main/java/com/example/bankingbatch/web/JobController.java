@@ -3,6 +3,7 @@ package com.example.bankingbatch.web;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,9 +23,9 @@ public class JobController {
     private final Job fileLoadJob;
 
     public JobController(JobLauncher jobLauncher,
-                         Job dailyTransactionJob,
-                         Job monthlyInterestJob,
-                         Job fileLoadJob) {
+                         @Qualifier("dailyTransactionJob") Job dailyTransactionJob,
+                         @Qualifier("monthlyInterestJob") Job monthlyInterestJob,
+                         @Qualifier("fileLoadJob") Job fileLoadJob) {
         this.jobLauncher = jobLauncher;
         this.dailyTransactionJob = dailyTransactionJob;
         this.monthlyInterestJob = monthlyInterestJob;

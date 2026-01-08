@@ -21,6 +21,8 @@ import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +65,7 @@ public class DailyTransactionJobConfig {
     }
 
     @Bean
+    @StepScope
     public JpaPagingItemReader<TransactionStaging> dailyTransactionReader() {
         return new JpaPagingItemReaderBuilder<TransactionStaging>()
                 .name("dailyTransactionReader")
@@ -124,7 +127,7 @@ public class DailyTransactionJobConfig {
 
     @Bean
     public Step dailyTransactionStep(JpaPagingItemReader<TransactionStaging> dailyTransactionReader,
-                                     StepTimingListener dailyStepTimingListener) {
+                                     @Qualifier("dailyStepTimingListener") StepTimingListener dailyStepTimingListener) {
         return new StepBuilder("dailyTransactionStep", jobRepository)
                 .<TransactionStaging, TransactionStaging>chunk(100, transactionManager)
                 .reader(dailyTransactionReader)
@@ -138,7 +141,8 @@ public class DailyTransactionJobConfig {
     }
 
     @Bean
-    public Job dailyTransactionJob(Step dailyTransactionStep) {
+
+    public Job dailyTransactionJob(@Qualifier("dailyTransactionStep") Step dailyTransactionStep) {
         return new JobBuilder("dailyTransactionJob", jobRepository)
                 .start(dailyTransactionStep)
                 .listener(new BatchMetricsListener(meterRegistry))

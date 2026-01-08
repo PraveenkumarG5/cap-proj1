@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Builder.Default;
 
 import java.time.LocalDateTime;
 
@@ -31,6 +32,7 @@ public class AuditLog {
     private String payload;
 
     @Column(name = "created_at", nullable = false)
+    @Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }
 

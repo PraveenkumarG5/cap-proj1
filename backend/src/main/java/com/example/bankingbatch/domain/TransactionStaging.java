@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Builder.Default;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,9 +38,11 @@ public class TransactionStaging {
     private String direction; // CREDIT or DEBIT
 
     @Column(name = "processed_flag", nullable = false)
+    @Default
     private boolean processedFlag = false;
 
     @Column(name = "created_at", nullable = false)
+    @Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }
 

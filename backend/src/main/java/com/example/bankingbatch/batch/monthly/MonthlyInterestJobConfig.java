@@ -15,6 +15,8 @@ import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
@@ -50,6 +52,7 @@ public class MonthlyInterestJobConfig {
     }
 
     @Bean
+    @StepScope
     public ItemReader<Account> monthlyInterestReader() {
         List<Account> activeAccounts = accountRepository.findByStatus("ACTIVE");
         return new ListItemReader<>(activeAccounts);
@@ -84,7 +87,7 @@ public class MonthlyInterestJobConfig {
 
     @Bean
     public Step monthlyInterestStep(ItemReader<Account> monthlyInterestReader,
-                                    StepTimingListener monthlyStepTimingListener) {
+                                    @Qualifier("monthlyStepTimingListener") StepTimingListener monthlyStepTimingListener) {
         return new StepBuilder("monthlyInterestStep", jobRepository)
                 .<Account, Account>chunk(100, transactionManager)
                 .reader(monthlyInterestReader)
@@ -95,7 +98,7 @@ public class MonthlyInterestJobConfig {
     }
 
     @Bean
-    public Job monthlyInterestJob(Step monthlyInterestStep) {
+    public Job monthlyInterestJob(@Qualifier("monthlyInterestStep") Step monthlyInterestStep) {
         return new JobBuilder("monthlyInterestJob", jobRepository)
                 .start(monthlyInterestStep)
                 .build();

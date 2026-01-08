@@ -1,12 +1,14 @@
 package com.example.bankingbatch.config;
 
 import jakarta.persistence.EntityManagerFactory;
-import org.springframework.batch.core.configuration.annotation.DefaultBatchConfiguration;
 import org.springframework.context.annotation.Configuration;
 
-// Exposes the shared EntityManagerFactory to Spring Batch infrastructure.
+// Minimal Batch configuration holder. Spring Boot's auto-configuration
+// will provide the necessary Batch infrastructure for this app; keep
+// a reference to the application's EntityManagerFactory so it can be
+// injected if needed elsewhere.
 @Configuration
-public class BatchConfig extends DefaultBatchConfiguration {
+public class BatchConfig {
 
     private final EntityManagerFactory entityManagerFactory;
 
@@ -14,8 +16,7 @@ public class BatchConfig extends DefaultBatchConfiguration {
         this.entityManagerFactory = entityManagerFactory;
     }
 
-    @Override
-    public EntityManagerFactory getEntityManagerFactory() {
+    public EntityManagerFactory entityManagerFactory() {
         return this.entityManagerFactory;
     }
 }

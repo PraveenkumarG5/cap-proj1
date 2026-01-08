@@ -1,0 +1,25 @@
+@startuml
+title Enterprise Banking Batch Engine - Architecture
+
+actor User
+rectangle Frontend {
+  [React Dashboard]
+}
+rectangle Backend {
+  [JobController] --> [Spring Batch Jobs]
+  [Spring Batch Jobs] --> [Steps]
+  [Steps] --> [Reader]
+  [Steps] --> [Processor]
+  [Steps] --> [Writer]
+  [JobRunLog DB] <-- [JobController]
+  [Spring Data Repositories]
+  [Spring Batch Jobs] --> [Spring Data Repositories]
+  [Batch Metrics] --> [Micrometer/Prometheus]
+}
+database "Postgres / H2" as DB
+[Writer] --> DB
+[Spring Data Repositories] --> DB
+[React Dashboard] --> [JobController] : REST
+User --> [React Dashboard]
+
+@enduml

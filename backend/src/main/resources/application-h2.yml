@@ -18,6 +18,10 @@ spring:
   batch:
     jdbc:
       initialize-schema: always
+    job:
+      enabled: false
+    file-load:
+      chunk-size: 1000
 
 management:
   endpoints:

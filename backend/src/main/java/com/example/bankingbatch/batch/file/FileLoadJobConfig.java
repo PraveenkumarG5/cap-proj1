@@ -23,6 +23,8 @@ import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -37,6 +39,8 @@ public class FileLoadJobConfig {
     private final JobRunLogRepository jobRunLogRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
+    @Value("${batch.file-load.chunk-size:1000}")
+    private int chunkSize;
 
     public FileLoadJobConfig(DataSource dataSource,
                              JobRunLogRepository jobRunLogRepository,
@@ -56,8 +60,9 @@ public class FileLoadJobConfig {
         return new StepTimingListener();
     }
 
-    @Bean
-    public FlatFileItemReader<TransactionStaging> fileLoadReader(
+        @Bean
+        @StepScope
+        public FlatFileItemReader<TransactionStaging> fileLoadReader(
             @Value("#{jobParameters['filePath']}") String filePath) {
         return new FlatFileItemReaderBuilder<TransactionStaging>()
                 .name("fileLoadReader")
@@ -109,9 +114,9 @@ public class FileLoadJobConfig {
     @Bean
     public Step fileLoadStep(FlatFileItemReader<TransactionStaging> fileLoadReader,
                              JdbcBatchItemWriter<TransactionStaging> fileLoadWriter,
-                             StepTimingListener fileLoadStepTimingListener) {
+                             @Qualifier("fileLoadStepTimingListener") StepTimingListener fileLoadStepTimingListener) {
         return new StepBuilder("fileLoadStep", jobRepository)
-                .<TransactionStaging, TransactionStaging>chunk(1000, transactionManager)
+                .<TransactionStaging, TransactionStaging>chunk(chunkSize, transactionManager)
                 .reader(fileLoadReader)
                 .processor(fileLoadProcessor())
                 .writer(fileLoadWriter)
@@ -122,7 +127,7 @@ public class FileLoadJobConfig {
     }
 
     @Bean
-    public Job fileLoadJob(Step fileLoadStep) {
+    public Job fileLoadJob(@Qualifier("fileLoadStep") Step fileLoadStep) {
         return new JobBuilder("fileLoadJob", jobRepository)
                 .listener(new JobExecutionListener() {
                     @Override
