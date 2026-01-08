@@ -29,8 +29,9 @@ const writeStream = fs.createWriteStream(OUT_FILE, { encoding: 'utf8' });
 writeStream.write('txnId,accountNumber,amount,direction\n');
 
 const directions = ['CREDIT', 'DEBIT'];
+const ACCOUNTS = Array.from({ length: 50 }, (_, i) => `ACC-${1001 + i}`);
 for (let i = 1; i <= TOTAL_ROWS; i++) {
-  const accountNumber = i % 2 === 0 ? 'ACC-1001' : 'ACC-1002';
+  const accountNumber = ACCOUNTS[i % ACCOUNTS.length];
   const amount = (Math.random() * 200).toFixed(2);
   const direction = directions[i % 2];
   writeStream.write(`GEN-${i},${accountNumber},${amount},${direction}\n`);

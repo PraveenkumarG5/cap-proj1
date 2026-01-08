@@ -1,9 +1,9 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/bankdb
+    url: jdbc:postgresql://localhost:5432/postgres
     driver-class-name: org.postgresql.Driver
-    username: bankuser
-    password: bankpass
+    username: postgres
+    password: Praveen
   jpa:
     hibernate:
       ddl-auto: none
@@ -11,10 +11,16 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-    show-sql: true
+    show-sql: false
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data-postgresql.sql
   batch:
     jdbc:
       initialize-schema: always
+    job:
+      enabled: false
 
 management:
   endpoints:
@@ -31,5 +37,9 @@ logging:
   level:
     org.springframework.batch: INFO
     org.springframework.jdbc.core: INFO
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.orm.jpa: WARN
 
 

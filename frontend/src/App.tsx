@@ -29,8 +29,8 @@ export const App: React.FC = () => {
       axios.get<JobInstance[]>('/api/dashboard/instances'),
       axios.get<JobRunLog[]>('/api/dashboard/job-run-logs')
     ]);
-    setInstances(instRes.data);
-    setRunLogs(logsRes.data);
+    setInstances(instRes.data.sort((a, b) => a.instanceId - b.instanceId));
+    setRunLogs(logsRes.data.sort((a, b) => b.id - a.id));
   };
 
   useEffect(() => {

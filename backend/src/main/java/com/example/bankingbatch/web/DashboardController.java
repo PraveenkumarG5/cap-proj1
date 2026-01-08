@@ -1,7 +1,5 @@
 package com.example.bankingbatch.web;
 
-import com.example.bankingbatch.domain.JobRunLog;
-import com.example.bankingbatch.repository.JobRunLogRepository;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.batch.core.JobInstance;
 import org.springframework.batch.core.JobExecution;
@@ -14,17 +12,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Lightweight dashboard APIs for listing job instances and run logs.
+// Lightweight dashboard APIs for listing job instances.
 @RestController
 @RequestMapping("/api/dashboard")
 public class DashboardController {
 
     private final JobExplorer jobExplorer;
-    private final JobRunLogRepository jobRunLogRepository;
 
-    public DashboardController(JobExplorer jobExplorer, JobRunLogRepository jobRunLogRepository) {
+    public DashboardController(JobExplorer jobExplorer) {
         this.jobExplorer = jobExplorer;
-        this.jobRunLogRepository = jobRunLogRepository;
     }
 
     @GetMapping("/instances")
@@ -43,16 +39,15 @@ public class DashboardController {
                     map.put("status", lastExecution.getStatus().toString());
                     map.put("startTime", lastExecution.getStartTime());
                     map.put("endTime", lastExecution.getEndTime());
+                    long recordsProcessed = lastExecution.getStepExecutions().stream()
+                            .mapToLong(stepExecution -> stepExecution.getWriteCount())
+                            .sum();
+                    map.put("recordsProcessed", recordsProcessed);
                 }
                 result.add(map);
             }
         }
         return result;
-    }
-
-    @GetMapping("/job-run-logs")
-    public List<JobRunLog> jobRunLogs() {
-        return jobRunLogRepository.findAll();
     }
 }
 

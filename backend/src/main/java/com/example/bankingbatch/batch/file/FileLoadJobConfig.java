@@ -13,8 +13,6 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
-import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -29,6 +27,8 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 
 // Configures the CSV file-load job that stages raw transactions into transaction_staging.
@@ -64,16 +64,34 @@ public class FileLoadJobConfig {
         @StepScope
         public FlatFileItemReader<TransactionStaging> fileLoadReader(
             @Value("#{jobParameters['filePath']}") String filePath) {
-        return new FlatFileItemReaderBuilder<TransactionStaging>()
-                .name("fileLoadReader")
-                .resource(new FileSystemResource(filePath))
-                .linesToSkip(1)
-                .delimited()
-                .names("txnId", "accountNumber", "amount", "direction")
-                .fieldSetMapper(new BeanWrapperFieldSetMapper<>() {{
-                    setTargetType(TransactionStaging.class);
-                }})
-                .build();
+            // Resolve common relative path issues: callers may pass "backend/inbound/..."
+            String resolvedPath = filePath != null ? filePath : "";
+            FileSystemResource resource = new FileSystemResource(resolvedPath);
+            if (!resource.exists()) {
+                // Try stripping a leading "backend/" segment
+                String alt = resolvedPath.replaceFirst("(?i)^backend[/\\\\]+", "");
+                resource = new FileSystemResource(alt);
+            }
+            if (!resource.exists()) {
+                // Try resolving against the workspace/project root (parent of current working dir)
+                Path cwd = Paths.get(System.getProperty("user.dir"));
+                Path alt2 = cwd.resolve("..").resolve(resolvedPath).normalize();
+                resource = new FileSystemResource(alt2.toString());
+            }
+            if (!resource.exists()) {
+                throw new IllegalStateException("Input resource must exist (tried: '" + filePath + "', alternatives tried)");
+            }
+
+            return new FlatFileItemReaderBuilder<TransactionStaging>()
+                    .name("fileLoadReader")
+                    .resource(resource)
+                    .linesToSkip(1)
+                    .delimited()
+                    .names("txnId", "accountNumber", "amount", "direction")
+                    .fieldSetMapper(new BeanWrapperFieldSetMapper<>() {{
+                        setTargetType(TransactionStaging.class);
+                    }})
+                    .build();
     }
 
     @Bean

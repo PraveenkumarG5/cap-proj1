@@ -10,9 +10,14 @@ import com.example.bankingbatch.repository.AccountRepository;
 import com.example.bankingbatch.repository.AuditLogRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManagerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.listener.StepListenerSupport;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
@@ -29,12 +34,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // Configures the Daily Transaction Processing job: reads unprocessed staging rows,
 // applies credit/debit to accounts, writes audit logs, and marks records processed.
+// Handles errors gracefully: logs failures and continues processing remaining transactions.
 @Configuration
 public class DailyTransactionJobConfig {
 
+    private static final Logger logger = LoggerFactory.getLogger(DailyTransactionJobConfig.class);
+    
     private final EntityManagerFactory entityManagerFactory;
     private final AccountRepository accountRepository;
     private final AuditLogRepository auditLogRepository;
@@ -78,40 +87,47 @@ public class DailyTransactionJobConfig {
     @Bean
     public ItemProcessor<TransactionStaging, TransactionStaging> dailyTransactionProcessor() {
         return item -> {
-            // Load account and apply transaction with HALF_EVEN rounding.
-            Account account = accountRepository.findByAccountNumber(item.getAccountNumber())
-                    .orElseThrow(() -> new IllegalArgumentException("Account not found: " + item.getAccountNumber()));
+            try {
+                // Load account and apply transaction with HALF_EVEN rounding.
+                Account account = accountRepository.findByAccountNumber(item.getAccountNumber())
+                        .orElseThrow(() -> new IllegalArgumentException("Account not found: " + item.getAccountNumber()));
 
-            BigDecimal amount = item.getAmount().setScale(2, RoundingMode.HALF_EVEN);
-            BigDecimal newBalance;
+                BigDecimal amount = item.getAmount().setScale(2, RoundingMode.HALF_EVEN);
+                BigDecimal newBalance;
 
-            if ("CREDIT".equalsIgnoreCase(item.getDirection())) {
-                newBalance = account.getBalance().add(amount);
-            } else if ("DEBIT".equalsIgnoreCase(item.getDirection())) {
-                newBalance = account.getBalance().subtract(amount);
-            } else {
-                throw new IllegalArgumentException("Unknown direction: " + item.getDirection());
+                if ("CREDIT".equalsIgnoreCase(item.getDirection())) {
+                    newBalance = account.getBalance().add(amount);
+                } else if ("DEBIT".equalsIgnoreCase(item.getDirection())) {
+                    newBalance = account.getBalance().subtract(amount);
+                } else {
+                    throw new IllegalArgumentException("Unknown direction: " + item.getDirection());
+                }
+
+                if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new InsufficientFundsException("Insufficient funds for account " + account.getAccountNumber());
+                }
+
+                account.setBalance(newBalance.setScale(2, RoundingMode.HALF_EVEN));
+                accountRepository.save(account);
+
+                // Persist lightweight audit entry; payload kept simple JSON string.
+                AuditLog log = AuditLog.builder()
+                        .eventType("DAILY_TXN")
+                        .reference(item.getTxnId())
+                        .payload("{\"accountNumber\":\"" + account.getAccountNumber() + "\",\"amount\":" + amount + ",\"direction\":\"" + item.getDirection() + "\"}")
+                        .createdAt(LocalDateTime.now())
+                        .build();
+                auditLogRepository.save(log);
+
+                // Mark processed
+                item.setProcessedFlag(true);
+                return item;
+            } catch (InsufficientFundsException | IllegalArgumentException e) {
+                // Log failure but don't throw; return null to skip writing
+                logger.warn("Failed to process transaction ID {}: {}", item.getTxnId(), e.getMessage());
+                item.setProcessedFlag(false); // Mark as not processed so it can be retried
+                return null; // Returning null filters this item from the writer
             }
-
-            if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                throw new InsufficientFundsException("Insufficient funds for account " + account.getAccountNumber());
-            }
-
-            account.setBalance(newBalance.setScale(2, RoundingMode.HALF_EVEN));
-            accountRepository.save(account);
-
-            // Persist lightweight audit entry; payload kept simple JSON string.
-            AuditLog log = AuditLog.builder()
-                    .eventType("DAILY_TXN")
-                    .reference(item.getTxnId())
-                    .payload("{\"accountNumber\":\"" + account.getAccountNumber() + "\",\"amount\":" + amount + ",\"direction\":\"" + item.getDirection() + "\"}")
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            auditLogRepository.save(log);
-
-            // Optionally mark processed (can also be done in writer)
-            item.setProcessedFlag(true);
-            return item;
         };
     }
 
@@ -125,18 +141,25 @@ public class DailyTransactionJobConfig {
         };
     }
 
+    /**
+     * Listener bean that tracks failed transactions and logs summary statistics.
+     */
+    @Bean
+    public TransactionFailureListener dailyTransactionFailureListener() {
+        return new TransactionFailureListener();
+    }
+
     @Bean
     public Step dailyTransactionStep(JpaPagingItemReader<TransactionStaging> dailyTransactionReader,
-                                     @Qualifier("dailyStepTimingListener") StepTimingListener dailyStepTimingListener) {
+                                     @Qualifier("dailyStepTimingListener") StepTimingListener dailyStepTimingListener,
+                                     @Qualifier("dailyTransactionFailureListener") TransactionFailureListener failureListener) {
         return new StepBuilder("dailyTransactionStep", jobRepository)
                 .<TransactionStaging, TransactionStaging>chunk(100, transactionManager)
                 .reader(dailyTransactionReader)
                 .processor(dailyTransactionProcessor())
                 .writer(dailyTransactionWriter())
-                .listener(dailyStepTimingListener)
-                .faultTolerant()
-                .skip(IllegalArgumentException.class)
-                .skip(InsufficientFundsException.class)
+                .listener((org.springframework.batch.core.StepExecutionListener) dailyStepTimingListener)
+                .listener((org.springframework.batch.core.StepExecutionListener) failureListener)
                 .build();
     }
 
@@ -147,6 +170,39 @@ public class DailyTransactionJobConfig {
                 .start(dailyTransactionStep)
                 .listener(new BatchMetricsListener(meterRegistry))
                 .build();
+    }
+}
+
+/**
+ * Listener that tracks and logs the count of failed transactions in the daily job.
+ */
+class TransactionFailureListener extends StepListenerSupport<TransactionStaging, TransactionStaging> {
+    
+    private static final Logger logger = LoggerFactory.getLogger(TransactionFailureListener.class);
+    private final AtomicInteger failureCount = new AtomicInteger(0);
+    
+    @Override
+    public void beforeStep(org.springframework.batch.core.StepExecution stepExecution) {
+        failureCount.set(0);
+        logger.info("Daily transaction step starting");
+    }
+    
+    @Override
+    public ExitStatus afterStep(org.springframework.batch.core.StepExecution stepExecution) {
+        long totalProcessed = stepExecution.getReadCount();
+        long writeCount = stepExecution.getWriteCount();
+        long failures = totalProcessed - writeCount;
+        
+        if (failures > 0) {
+            logger.warn("Daily transaction step completed with {} failed entries out of {} total. {} successfully processed.", 
+                    failures, totalProcessed, writeCount);
+        } else {
+            logger.info("Daily transaction step completed successfully. Processed {} entries.", writeCount);
+        }
+        logger.info("Read: {}, Written: {}, Failed: {}", totalProcessed, writeCount, failures);
+        
+        // Always return normal exit status so the job completes even with failures
+        return stepExecution.getExitStatus();
     }
 }
 
