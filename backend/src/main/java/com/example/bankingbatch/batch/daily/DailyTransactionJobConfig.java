@@ -8,7 +8,6 @@ import com.example.bankingbatch.domain.AuditLog;
 import com.example.bankingbatch.domain.TransactionStaging;
 import com.example.bankingbatch.repository.AccountRepository;
 import com.example.bankingbatch.repository.AuditLogRepository;
-import com.example.bankingbatch.repository.TransactionStagingRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManagerFactory;
 import org.slf4j.Logger;
@@ -20,17 +19,22 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.listener.StepListenerSupport;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.item.database.JpaPagingItemReader;
-import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.batch.item.database.JdbcPagingItemReader;
+import org.springframework.batch.item.database.PagingQueryProvider;
+import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
+import org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean;
+import org.springframework.batch.item.database.JpaItemWriter;
+import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
+import org.springframework.jdbc.core.RowMapper;
+import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -46,24 +50,24 @@ public class DailyTransactionJobConfig {
     private static final Logger logger = LoggerFactory.getLogger(DailyTransactionJobConfig.class);
     
     private final EntityManagerFactory entityManagerFactory;
+    private final DataSource dataSource;
     private final AccountRepository accountRepository;
     private final AuditLogRepository auditLogRepository;
-    private final TransactionStagingRepository transactionStagingRepository;
     private final MeterRegistry meterRegistry;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
 
     public DailyTransactionJobConfig(EntityManagerFactory entityManagerFactory,
+                                     DataSource dataSource,
                                      AccountRepository accountRepository,
                                      AuditLogRepository auditLogRepository,
-                                     TransactionStagingRepository transactionStagingRepository,
                                      MeterRegistry meterRegistry,
                                      JobRepository jobRepository,
                                      PlatformTransactionManager transactionManager) {
         this.entityManagerFactory = entityManagerFactory;
+        this.dataSource = dataSource;
         this.accountRepository = accountRepository;
         this.auditLogRepository = auditLogRepository;
-        this.transactionStagingRepository = transactionStagingRepository;
         this.meterRegistry = meterRegistry;
         this.jobRepository = jobRepository;
         this.transactionManager = transactionManager;
@@ -79,12 +83,36 @@ public class DailyTransactionJobConfig {
 
     @Bean
     @StepScope
-    public JpaPagingItemReader<TransactionStaging> dailyTransactionReader() {
-        return new JpaPagingItemReaderBuilder<TransactionStaging>()
+    public JdbcPagingItemReader<TransactionStaging> dailyTransactionReader() throws Exception {
+        RowMapper<TransactionStaging> rowMapper = new RowMapper<TransactionStaging>() {
+            @Override
+            public TransactionStaging mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return TransactionStaging.builder()
+                        .id(rs.getLong("id"))
+                        .txnId(rs.getString("txn_id"))
+                        .accountNumber(rs.getString("account_number"))
+                        .amount(rs.getBigDecimal("amount"))
+                        .direction(rs.getString("direction"))
+                        .processedFlag(rs.getBoolean("processed_flag"))
+                        .createdAt(rs.getTimestamp("created_at") != null ? 
+                                rs.getTimestamp("created_at").toLocalDateTime() : LocalDateTime.now())
+                        .build();
+            }
+        };
+        
+        SqlPagingQueryProviderFactoryBean queryProvider = new SqlPagingQueryProviderFactoryBean();
+        queryProvider.setDataSource(dataSource);
+        queryProvider.setSelectClause("SELECT id, txn_id, account_number, amount, direction, processed_flag, created_at");
+        queryProvider.setFromClause("FROM transaction_staging");
+        queryProvider.setWhereClause("WHERE processed_flag = false");
+        queryProvider.setSortKey("id");
+        
+        return new JdbcPagingItemReaderBuilder<TransactionStaging>()
                 .name("dailyTransactionReader")
-                .entityManagerFactory(entityManagerFactory)
+                .dataSource(dataSource)
+                .queryProvider(queryProvider.getObject())
                 .pageSize(100)
-                .queryString("SELECT t FROM TransactionStaging t WHERE t.processedFlag = false ORDER BY t.id ASC")
+                .rowMapper(rowMapper)
                 .build();
     }
 
@@ -136,13 +164,14 @@ public class DailyTransactionJobConfig {
     }
 
     @Bean
-    @Transactional
-    public ItemWriter<TransactionStaging> dailyTransactionWriter() {
+    @StepScope
+    public JpaItemWriter<TransactionStaging> dailyTransactionWriter() {
         // Writer persists the processedFlag changes to TransactionStaging entities.
         // The processor already updates Account and AuditLog, and sets processedFlag=true.
-        return items -> {
-            transactionStagingRepository.saveAll(items.getItems());
-        };
+        // JpaItemWriter handles EntityManager properly and ensures updates are visible to subsequent reads.
+        return new JpaItemWriterBuilder<TransactionStaging>()
+                .entityManagerFactory(entityManagerFactory)
+                .build();
     }
 
     /**
@@ -154,7 +183,7 @@ public class DailyTransactionJobConfig {
     }
 
     @Bean
-    public Step dailyTransactionStep(JpaPagingItemReader<TransactionStaging> dailyTransactionReader,
+    public Step dailyTransactionStep(JdbcPagingItemReader<TransactionStaging> dailyTransactionReader,
                                      @Qualifier("dailyStepTimingListener") StepTimingListener dailyStepTimingListener,
                                      @Qualifier("dailyTransactionFailureListener") TransactionFailureListener failureListener) {
         return new StepBuilder("dailyTransactionStep", jobRepository)

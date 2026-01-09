@@ -34,7 +34,7 @@ for (let i = 1; i <= TOTAL_ROWS; i++) {
   const accountNumber = ACCOUNTS[i % ACCOUNTS.length];
   const amount = (Math.random() * 200).toFixed(2);
   const direction = directions[i % 2];
-  writeStream.write(`GEN-${i},${accountNumber},${amount},${direction}\n`);
+  writeStream.write(`TXS-${i},${accountNumber},${amount},${direction}\n`);
 }
 
 writeStream.end(() => {
