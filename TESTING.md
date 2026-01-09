@@ -474,15 +474,10 @@ curl http://localhost:8080/api/dashboard/instances
     "instanceId": 1,
     "status": "COMPLETED",
     "startTime": "2024-01-15T10:30:00",
-    "endTime": "2024-01-15T10:30:05"
+    "endTime": "2024-01-15T10:30:05",
+    "recordsProcessed": 500
   }
 ]
-```
-
-#### 5. Get Job Run Logs
-
-```bash
-curl http://localhost:8080/api/dashboard/job-run-logs
 ```
 
 ### Using Postman
@@ -499,7 +494,6 @@ curl http://localhost:8080/api/dashboard/job-run-logs
    - `POST {{baseUrl}}/api/jobs/interest`
    - `POST {{baseUrl}}/api/jobs/load-file?path=backend/inbound/transactions.csv`
    - `GET {{baseUrl}}/api/dashboard/instances`
-   - `GET {{baseUrl}}/api/dashboard/job-run-logs`
 
 ---
 
@@ -694,9 +688,6 @@ node generate-transactions.js 5000000
    ```bash
    # Check job status
    curl http://localhost:8080/api/dashboard/instances
-   
-   # Check job run logs
-   curl http://localhost:8080/api/dashboard/job-run-logs
    ```
 
 ### Expected Performance Metrics
@@ -863,9 +854,6 @@ curl -X POST "http://localhost:8080/api/jobs/load-file?path=backend/inbound/tran
 
 # Check job instances
 curl http://localhost:8080/api/dashboard/instances
-
-# Check job run logs
-curl http://localhost:8080/api/dashboard/job-run-logs
 
 # Access H2 console
 # Browser: http://localhost:8080/h2-console

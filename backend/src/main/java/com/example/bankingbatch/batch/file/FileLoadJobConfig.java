@@ -1,13 +1,9 @@
 package com.example.bankingbatch.batch.file;
 
 import com.example.bankingbatch.batch.metrics.StepTimingListener;
-import com.example.bankingbatch.domain.JobRunLog;
 import com.example.bankingbatch.domain.TransactionStaging;
-import com.example.bankingbatch.repository.JobRunLogRepository;
 import javax.sql.DataSource;
 import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobExecutionListener;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
@@ -30,24 +26,20 @@ import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
-
 // Configures the CSV file-load job that stages raw transactions into transaction_staging.
 @Configuration
 public class FileLoadJobConfig {
 
     private final DataSource dataSource;
-    private final JobRunLogRepository jobRunLogRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     @Value("${batch.file-load.chunk-size:1000}")
     private int chunkSize;
 
     public FileLoadJobConfig(DataSource dataSource,
-                             JobRunLogRepository jobRunLogRepository,
                              JobRepository jobRepository,
                              PlatformTransactionManager transactionManager) {
         this.dataSource = dataSource;
-        this.jobRunLogRepository = jobRunLogRepository;
         this.jobRepository = jobRepository;
         this.transactionManager = transactionManager;
     }
@@ -147,34 +139,6 @@ public class FileLoadJobConfig {
     @Bean
     public Job fileLoadJob(@Qualifier("fileLoadStep") Step fileLoadStep) {
         return new JobBuilder("fileLoadJob", jobRepository)
-                .listener(new JobExecutionListener() {
-                    @Override
-                    public void beforeJob(JobExecution jobExecution) {
-                        // Record start in JobRunLog for simple auditability.
-                        JobRunLog log = JobRunLog.builder()
-                                .jobName("fileLoadJob")
-                                .status("STARTED")
-                                .startTime(LocalDateTime.now())
-                                .details("File load started with params: " + jobExecution.getJobParameters())
-                                .build();
-                        jobRunLogRepository.save(log);
-                        jobExecution.getExecutionContext().putLong("jobRunLogId", log.getId());
-                    }
-
-                    @Override
-                    public void afterJob(JobExecution jobExecution) {
-                        long id = jobExecution.getExecutionContext().getLong("jobRunLogId", -1L);
-                        if (id > 0) {
-                            JobRunLog log = jobRunLogRepository.findById(id).orElse(null);
-                            if (log != null) {
-                                log.setStatus(jobExecution.getStatus().name());
-                                log.setEndTime(LocalDateTime.now());
-                                log.setDetails("Exit status: " + jobExecution.getExitStatus());
-                                jobRunLogRepository.save(log);
-                            }
-                        }
-                    }
-                })
                 .start(fileLoadStep)
                 .build();
     }

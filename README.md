@@ -57,7 +57,6 @@ mvn -pl backend spring-boot:run -Dspring-boot.run.profiles=postgres
 
 - **Dashboard APIs**
   - `GET /api/dashboard/instances` – job instances with latest execution status
-  - `GET /api/dashboard/job-run-logs` – list of `JobRunLog` rows
 
 ### Frontend (Vite + React)
 

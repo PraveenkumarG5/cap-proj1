@@ -191,7 +191,6 @@ This document outlines the comprehensive migration strategy for transforming a l
 │  │ - TransactionRepository                                              │ │
 │  │ - TransactionStagingRepository                                       │ │
 │  │ - AuditLogRepository                                                 │ │
-│  │ - JobRunLogRepository                                                │ │
 │  └──────────────────────────────────────────────────────────────────────┘ │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -210,13 +209,13 @@ This document outlines the comprehensive migration strategy for transforming a l
 │  └──────────────────┘  └──────────────────┘  └──────────────────────────┘ │
 │                                                                            │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐ │
-│  │ audit_logs       │  │ job_run_log      │  │ batch_job_instance       │ │
-│  │ - id             │  │ - id             │  │ (Spring Batch metadata)  │ │
-│  │ - event_type     │  │ - job_name       │  │                          │ │
-│  │ - reference      │  │ - status         │  │ batch_job_execution      │ │
-│  │ - payload        │  │ - start_time     │  │ (Spring Batch metadata)  │ │
-│  │ - created_at     │  │ - end_time       │  │                          │ │
-│  └──────────────────┘  └──────────────────┘  └──────────────────────────┘ │
+│  │ audit_logs       │  │ batch_job_instance                              │ │
+│  │ - id             │  │ (Spring Batch metadata)                          │ │
+│  │ - event_type     │  │                                                  │ │
+│  │ - reference      │  │ batch_job_execution                              │ │
+│  │ - payload        │  │ (Spring Batch metadata)                          │ │
+│  │ - created_at     │  │                                                  │ │
+│  └──────────────────┘  └──────────────────────────────────────────────────┘ │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -729,17 +728,6 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     INDEX idx_event_type (event_type),
     INDEX idx_reference (reference)
-);
-
--- Job Run Log Table (batch execution tracking)
-CREATE TABLE job_run_log (
-    id BIGSERIAL PRIMARY KEY,
-    job_name VARCHAR(100) NOT NULL,
-    status VARCHAR(20) NOT NULL,
-    start_time TIMESTAMP,
-    end_time TIMESTAMP,
-    details TEXT,
-    INDEX idx_job_name (job_name)
 );
 
 -- Spring Batch Metadata Tables

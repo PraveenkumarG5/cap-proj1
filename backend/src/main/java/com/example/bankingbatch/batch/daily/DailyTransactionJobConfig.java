@@ -8,18 +8,19 @@ import com.example.bankingbatch.domain.AuditLog;
 import com.example.bankingbatch.domain.TransactionStaging;
 import com.example.bankingbatch.repository.AccountRepository;
 import com.example.bankingbatch.repository.AuditLogRepository;
+import com.example.bankingbatch.repository.TransactionStagingRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.listener.StepListenerSupport;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
@@ -47,6 +48,7 @@ public class DailyTransactionJobConfig {
     private final EntityManagerFactory entityManagerFactory;
     private final AccountRepository accountRepository;
     private final AuditLogRepository auditLogRepository;
+    private final TransactionStagingRepository transactionStagingRepository;
     private final MeterRegistry meterRegistry;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
@@ -54,12 +56,14 @@ public class DailyTransactionJobConfig {
     public DailyTransactionJobConfig(EntityManagerFactory entityManagerFactory,
                                      AccountRepository accountRepository,
                                      AuditLogRepository auditLogRepository,
+                                     TransactionStagingRepository transactionStagingRepository,
                                      MeterRegistry meterRegistry,
                                      JobRepository jobRepository,
                                      PlatformTransactionManager transactionManager) {
         this.entityManagerFactory = entityManagerFactory;
         this.accountRepository = accountRepository;
         this.auditLogRepository = auditLogRepository;
+        this.transactionStagingRepository = transactionStagingRepository;
         this.meterRegistry = meterRegistry;
         this.jobRepository = jobRepository;
         this.transactionManager = transactionManager;
@@ -134,10 +138,10 @@ public class DailyTransactionJobConfig {
     @Bean
     @Transactional
     public ItemWriter<TransactionStaging> dailyTransactionWriter() {
-        // No-op writer because processor already updates Account and AuditLog.
-        // For Spring Batch 5, the ItemWriter interface uses Chunk<? extends T>.
+        // Writer persists the processedFlag changes to TransactionStaging entities.
+        // The processor already updates Account and AuditLog, and sets processedFlag=true.
         return items -> {
-            // Intentionally empty: all work is done in the processor.
+            transactionStagingRepository.saveAll(items.getItems());
         };
     }
 

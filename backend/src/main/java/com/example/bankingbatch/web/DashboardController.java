@@ -35,6 +35,7 @@ public class DashboardController {
                 Map<String, Object> map = new HashMap<>();
                 map.put("jobName", jobName);
                 map.put("instanceId", instance.getInstanceId());
+                map.put("recordsProcessed", 0L);
                 if (lastExecution != null) {
                     map.put("status", lastExecution.getStatus().toString());
                     map.put("startTime", lastExecution.getStartTime());

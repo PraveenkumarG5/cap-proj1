@@ -15,7 +15,7 @@ This document explains the high-level architecture, patterns, and how components
 ## Layering
 - `web` layer: REST controllers (e.g., `JobController`, `DashboardController`).
 - `batch` layer: Spring Batch job definitions (file loader, daily processing, monthly interest).
-- `domain` layer: JPA entities (`Account`, `TransactionStaging`, `JobRunLog`, `AuditLog`).
+- `domain` layer: JPA entities (`Account`, `TransactionStaging`, `AuditLog`).
 - `repository` layer: Spring Data JPA repositories providing persistence operations.
 - `config` layer: application configuration and beans.
 
@@ -37,7 +37,7 @@ This document explains the high-level architecture, patterns, and how components
 2. Trigger via `POST /api/jobs/load-file?path=...`.
 3. Spring Batch `fileLoadJob` runs a `FlatFileItemReader` → `ItemProcessor` → `JdbcBatchItemWriter` pipeline.
 4. Records are staged in `transaction_staging` and later processed by the daily job.
-5. `JobRunLog` entries track job start/end for auditability.
+5. Spring Batch metadata tables track job lifecycle and execution history.
 
 ## Key classes/files
 - `backend/src/main/java/com/example/bankingbatch/batch/file/FileLoadJobConfig.java` — file-load job configuration.

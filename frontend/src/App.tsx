@@ -7,30 +7,19 @@ interface JobInstance {
   status?: string;
   startTime?: string;
   endTime?: string;
-}
-
-interface JobRunLog {
-  id: number;
-  jobName: string;
-  status?: string;
-  startTime?: string;
-  endTime?: string;
-  details?: string;
+  recordsProcessed?: number;
 }
 
 export const App: React.FC = () => {
   const [instances, setInstances] = useState<JobInstance[]>([]);
-  const [runLogs, setRunLogs] = useState<JobRunLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = async () => {
-    const [instRes, logsRes] = await Promise.all([
-      axios.get<JobInstance[]>('/api/dashboard/instances'),
-      axios.get<JobRunLog[]>('/api/dashboard/job-run-logs')
+    const [instRes] = await Promise.all([
+      axios.get<JobInstance[]>('/api/dashboard/instances')
     ]);
     setInstances(instRes.data.sort((a, b) => a.instanceId - b.instanceId));
-    setRunLogs(logsRes.data.sort((a, b) => b.id - a.id));
   };
 
   useEffect(() => {
@@ -95,6 +84,7 @@ export const App: React.FC = () => {
               <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Status</th>
               <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Start</th>
               <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>End</th>
+              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Records Processed</th>
             </tr>
           </thead>
           <tbody>
@@ -105,51 +95,13 @@ export const App: React.FC = () => {
                 <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{i.status}</td>
                 <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{i.startTime}</td>
                 <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{i.endTime}</td>
+                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{i.recordsProcessed ?? 0}</td>
               </tr>
             ))}
             {instances.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '0.5rem' }}>
-                  No job instances yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
-        <h2>Job Run Logs</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>ID</th>
-              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Job</th>
-              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Status</th>
-              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Start</th>
-              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>End</th>
-              <th style={{ borderBottom: '1px solid #ddd', textAlign: 'left' }}>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runLogs.map((log) => (
-              <tr key={log.id}>
-                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{log.id}</td>
-                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{log.jobName}</td>
-                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{log.status}</td>
-                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{log.startTime}</td>
-                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem' }}>{log.endTime}</td>
-                <td style={{ borderBottom: '1px solid #f0f0f0', padding: '0.25rem 0.5rem', maxWidth: 300 }}>
-                  <code style={{ fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
-                    {log.details}
-                  </code>
-                </td>
-              </tr>
-            ))}
-            {runLogs.length === 0 && (
-              <tr>
                 <td colSpan={6} style={{ padding: '0.5rem' }}>
-                  No job run logs yet.
+                  No job instances yet.
                 </td>
               </tr>
             )}
